@@ -19,9 +19,8 @@ class Game:
         self.bird_group = pygame.sprite.Group()
 
         for i in range(gen_pop):
-            self.bird_group.add(Bird([np.random.rand(5, 5), np.random.rand(5),
-                                      np.random.rand(5, 5), np.random.rand(5),
-                                      np.random.rand(1, 5), np.random.rand(1)]))
+            self.bird_group.add(Bird([np.random.rand(4, 5), np.random.rand(4),
+                                      np.random.rand(2, 4), np.random.rand(2)]))
 
         self.reset_game()
 
@@ -46,7 +45,6 @@ class Game:
                 if len(self.bird_group.sprites()) < (gen_pop * percentage):
                     self.winners.append(entity)
 
-
         self.bird_group.update(dt, self.pipe_group)
 
         pipes = self.pipe_group.sprites()
@@ -69,8 +67,16 @@ class Game:
             self.end_gen()
 
     def end_gen(self):
+        total = 0
+        P = []
+        for w in self.winners:
+            total += w.distance_traveled
+            P.append(w.distance_traveled)
+
+        P = np.array(P) / total
+
         for n in range(int(gen_pop - (gen_pop * percentage))):
-            parents = random.sample(self.winners, 2)
+            parents = np.random.choice(self.winners, 2, replace=False, p=P)
             weights = copy.deepcopy(parents[0].weights)
 
             for i in range(len(weights)):
@@ -81,10 +87,12 @@ class Game:
                         weights[i][j] = parents[1].weights[i][j]
 
                     mutation = (2 * np.random.rand(*shape)) - 1
+
                     if len(shape) == 1:
-                        indices = np.random.choice(np.arange(mutation.size), replace=False,size=int(mutation.size * 0.9))
+                        indices = np.random.choice(np.arange(mutation.size), replace=False,
+                                                   size=int(mutation.size * 0.95))
                     else:
-                        indices = np.random.choice(shape[1]*shape[0], replace=False, size=int(shape[1]*shape[0]*0.9))
+                        indices = np.random.choice(shape[1]*shape[0], replace=False, size=int(shape[1]*shape[0]*0.95))
 
                     mutation[np.unravel_index(indices, shape)] = 0
                     weights[i] += mutation
@@ -125,7 +133,7 @@ class Bird(pygame.sprite.Sprite):
         dt = args[0]
         pipes = args[1].sprites()
 
-        inputs = [self.y_velocity, self.rect.y]
+        inputs = [self.rect.y, self.y_velocity]
 
         for i in range(len(pipes)):
             if (pipes[i].rect.x + 52) > self.rect.x:
@@ -137,8 +145,10 @@ class Bird(pygame.sprite.Sprite):
 
         self.y_velocity -= (10 * dt)
 
-        if self.neural_network(np.array(inputs)) > 0.5:
-            self.y_velocity = 8
+        outputs = self.neural_network(np.array(inputs))
+
+        if outputs[0] > outputs[1]:
+            self.y_velocity = 5
 
         self.y -= self.y_velocity
         self.distance_traveled += (x_velocity * dt)
@@ -148,7 +158,7 @@ class Bird(pygame.sprite.Sprite):
     def neural_network(self, inputs):
         k = inputs
         for i in range((len(self.weights) // 2) - 1):
-            k = np.tanh(np.dot(self.weights[2 * i], k) + self.weights[2 * i + 1])
+            k = np.maximum(0, np.dot(self.weights[2 * i], k) + self.weights[2 * i + 1])
         return np.dot(self.weights[-2], k) + self.weights[-1]
 
 
